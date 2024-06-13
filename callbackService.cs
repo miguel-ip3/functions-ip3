@@ -77,7 +77,7 @@ namespace functions
                         var results = ExecuteQueryDictionary(command, ref countEmail);
 
                         Console.WriteLine($"==============================================");
-                        Console.WriteLine($"Encontrados um total de {countEmail} registros como status enviado");
+                        Console.WriteLine($"Encontrados um total de {countEmail} registros de Email como status enviado");
                         Console.WriteLine($"==============================================");
 
                         // Processando e exibindo os resultados em blocos de 5
@@ -182,7 +182,7 @@ namespace functions
                         string blockJson = JsonSerializer.Serialize(block, new JsonSerializerOptions { WriteIndented = true });
 
                         //Visualizando os blocos enviados..
-                        Console.WriteLine("Enviando bloco:");
+                        Console.WriteLine("Enviando bloco de Email:");
                         Console.WriteLine(blockJson);
 
                         // Criando o conteúdo para a requisição HTTP
@@ -205,7 +205,7 @@ namespace functions
                         if (block != blocks.Last())
                         {
                             Console.WriteLine("========================================");
-                            Console.WriteLine($"Pausando por {pauseMilliseconds / 1000} segundos antes do próximo bloco de {blockSize}...");
+                            Console.WriteLine($"Pausando o bloco de SMS por {pauseMilliseconds / 1000} segundos antes do próximo bloco de {blockSize}...");
                             Console.WriteLine("========================================");
                             await Task.Delay(pauseMilliseconds); // Pausa assíncrona entre blocos
                         }
