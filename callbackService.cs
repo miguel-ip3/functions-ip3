@@ -36,7 +36,7 @@ namespace functions
         {
             int countEmail = 0;
 
-            Connection dbConnection = new Connection();
+            Connection dbConnection = new Connection("DatabaseEmail");
             using (SqlConnection connection = dbConnection.GetConnection())
             {
                 try
@@ -50,28 +50,24 @@ namespace functions
                             SELECT
                                 [LOSE_ID],
                                 [CLIE_ID],
-                                [MAIL_ID],
-                                [CAMP_ID],
                                 [MAIL_Identificador],
                                 [MAIL_EnderecoEmail],
                                 [LOSE_StatusRetorno],
                                 [LOSE_DetalheStatus],
                                 [LOSE_DataHoraStatus],
                                 [LOSE_Enviado],
-                                [LOSE_DatatHoraEnvio],
-                                [CALLBACK_Enviado]
+                                [LOSE_DatatHoraEnvio]
                             FROM 
                                 [ip3Teste].[dbo].[MKT_Log_StatusEnvio]
                             WHERE 
-                                [LOSE_Enviado] = @loseEnviado
-                                AND ([CALLBACK_Enviado] IS NULL OR [CALLBACK_Enviado] = @callbackEnviado) -- Verifica se CALLBACK_Enviado é NULL ou 0
+                                [LOSE_Enviado] IS NULL OR [LOSE_Enviado] = @loseEnviado
                             ORDER BY 
                                 [LOSE_DataHoraStatus] DESC;";
 
                     using (SqlCommand command = new SqlCommand(query, connection))
                     {
-                        command.Parameters.AddWithValue("@loseEnviado", 1);
-                        command.Parameters.AddWithValue("@callbackEnviado", 0);
+                        command.Parameters.AddWithValue("@loseEnviado", 0);
+                        //command.Parameters.AddWithValue("@callbackEnviado", 0);
 
                         // Convertendo o resultado da consulta para Dictionary
                         var results = ExecuteQueryDictionary(command, ref countEmail);
@@ -111,16 +107,13 @@ namespace functions
                     {
                         ["LOSE_ID"] = reader["LOSE_ID"],
                         ["CLIE_ID"] = reader["CLIE_ID"],
-                        ["MAIL_ID"] = reader["MAIL_ID"],
-                        ["CAMP_ID"] = reader["CAMP_ID"],
                         ["MAIL_Identificador"] = reader["MAIL_Identificador"],
                         ["MAIL_EnderecoEmail"] = reader["MAIL_EnderecoEmail"],
                         ["LOSE_StatusRetorno"] = reader["LOSE_StatusRetorno"],
                         ["LOSE_DetalheStatus"] = reader["LOSE_DetalheStatus"],
                         ["LOSE_DataHoraStatus"] = reader["LOSE_DataHoraStatus"],
                         ["LOSE_Enviado"] = reader["LOSE_Enviado"],
-                        ["LOSE_DatatHoraEnvio"] = reader["LOSE_DatatHoraEnvio"],
-                        ["CALLBACK_Enviado"] = reader["CALLBACK_Enviado"]
+                        ["LOSE_DatatHoraEnvio"] = reader["LOSE_DatatHoraEnvio"]
                     };
                     results.Add(row);
                 }
@@ -205,7 +198,7 @@ namespace functions
                         if (block != blocks.Last())
                         {
                             Console.WriteLine("========================================");
-                            Console.WriteLine($"Pausando o bloco de SMS por {pauseMilliseconds / 1000} segundos antes do próximo bloco de {blockSize}...");
+                            Console.WriteLine($"Pausando o bloco de EMAIL por {pauseMilliseconds / 1000} segundos antes do próximo bloco de {blockSize}...");
                             Console.WriteLine("========================================");
                             await Task.Delay(pauseMilliseconds); // Pausa assíncrona entre blocos
                         }
@@ -283,12 +276,12 @@ namespace functions
                     string idsParameter = string.Join(",", idsToUpdate);
 
                     // Construir a consulta de atualização em massa
-                    string updateQuery = $"UPDATE [ip3Teste].[dbo].[MKT_Log_StatusEnvio] SET [CALLBACK_Enviado] = @callbackEnviado WHERE [LOSE_ID] IN ({idsParameter})";
+                    string updateQuery = $"UPDATE [ip3Teste].[dbo].[MKT_Log_StatusEnvio] SET [LOSE_Enviado] = @loseenviado WHERE [LOSE_ID] IN ({idsParameter})";
 
                     using (SqlCommand updateCommand = new SqlCommand(updateQuery, connection))
                     {
                         updateCommand.Parameters.Clear();
-                        updateCommand.Parameters.AddWithValue("@callbackEnviado", 1);
+                        updateCommand.Parameters.AddWithValue("@loseenviado", 1);
                         updateCommand.ExecuteNonQuery();
                     }
                 }

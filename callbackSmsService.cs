@@ -35,7 +35,7 @@ namespace functions
         {
             int countSms = 0;
 
-            Connection dbConnection = new Connection();
+            Connection dbConnection = new Connection("DatabaseSMS");
             using (SqlConnection connection = dbConnection.GetConnection())
             {
                 try
@@ -55,20 +55,18 @@ namespace functions
                                 [LOSE_StatusRetorno],
                                 [LOSE_DataHoraStatus],
                                 [LOSE_Enviado],
-                                [LOSE_DatatHoraEnvio],
-                                [CALLBACK_Enviado]
+                                [LOSE_DatatHoraEnvio]
                             FROM 
-                                [ip3Teste].[dbo].[SMS_Log_StatusEnvio]
+                                [ip3Teste_SMS].[dbo].[SMS_Log_StatusEnvio]
                             WHERE 
-                                [LOSE_Enviado] = @loseEnviado
-                                AND ([CALLBACK_Enviado] IS NULL OR [CALLBACK_Enviado] = @callbackEnviado) -- Verifica se CALLBACK_Enviado é NULL ou 0
+                                [LOSE_Enviado] IS NULL OR [LOSE_Enviado] = @loseEnviado
                             ORDER BY 
                                 [LOSE_DataHoraStatus] DESC;";
 
                     using (SqlCommand command = new SqlCommand(query, connection))
                     {
-                        command.Parameters.AddWithValue("@loseEnviado", 1);
-                        command.Parameters.AddWithValue("@callbackEnviado", 0);
+                        command.Parameters.AddWithValue("@loseEnviado", 0);
+                        // command.Parameters.AddWithValue("@callbackEnviado", 0);
 
                         // Convertendo o resultado da consulta para Dictionary
                         var results = ExecuteQueryDictionary(command, ref countSms);
@@ -108,14 +106,11 @@ namespace functions
                     {
                         ["LOSE_ID"] = reader["LOSE_ID"],
                         ["CLIE_ID"] = reader["CLIE_ID"],
-                        ["ENVI_ID"] = reader["ENVI_ID"],
                         ["ENVI_Identificador"] = reader["ENVI_Identificador"],
-                        ["ENVI_StatusCode"] = reader["ENVI_StatusCode"],
                         ["LOSE_StatusRetorno"] = reader["LOSE_StatusRetorno"],
                         ["LOSE_DataHoraStatus"] = reader["LOSE_DataHoraStatus"],
                         ["LOSE_Enviado"] = reader["LOSE_Enviado"],
-                        ["LOSE_DatatHoraEnvio"] = reader["LOSE_DatatHoraEnvio"],
-                        ["CALLBACK_Enviado"] = reader["CALLBACK_Enviado"]
+                        ["LOSE_DatatHoraEnvio"] = reader["LOSE_DatatHoraEnvio"]
                     };
                     results.Add(row);
                 }
@@ -210,7 +205,7 @@ namespace functions
                         if (block != blocks.Last())
                         {
                             Console.WriteLine("========================================");
-                            Console.WriteLine($"Pausando o bloco de Email por {pauseMilliseconds / 1000} segundos antes do próximo bloco de {blockSize}...");
+                            Console.WriteLine($"Pausando o bloco de SMS por {pauseMilliseconds / 1000} segundos antes do próximo bloco de {blockSize}...");
                             Console.WriteLine("========================================");
                             await Task.Delay(pauseMilliseconds); // Pausa assíncrona entre blocos
                         }
@@ -232,7 +227,7 @@ namespace functions
             string query = @"SELECT 
                                 WEBHOOK 
                             FROM 
-                                [ip3Teste].[dbo].[MKT_Webhooks] 
+                                [ip3Teste_SMS].[dbo].[SMS_Webhooks] 
                             WHERE 
                                 CLIE_ID = @clieId AND TYPE_WEBHOOK = @typeWebhook";
 
@@ -288,12 +283,12 @@ namespace functions
                     string idsParameter = string.Join(",", idsToUpdate);
 
                     // Construir a consulta de atualização em massa
-                    string updateQuery = $"UPDATE [ip3Teste].[dbo].[SMS_Log_StatusEnvio] SET [CALLBACK_Enviado] = @callbackEnviado WHERE [LOSE_ID] IN ({idsParameter})";
+                    string updateQuery = $"UPDATE [ip3Teste_SMS].[dbo].[SMS_Log_StatusEnvio] SET [LOSE_Enviado] = @loseenviado WHERE [LOSE_ID] IN ({idsParameter})";
 
                     using (SqlCommand updateCommand = new SqlCommand(updateQuery, connection))
                     {
                         updateCommand.Parameters.Clear();
-                        updateCommand.Parameters.AddWithValue("@callbackEnviado", 1);
+                        updateCommand.Parameters.AddWithValue("@loseenviado", 1);
                         updateCommand.ExecuteNonQuery();
                     }
                 }

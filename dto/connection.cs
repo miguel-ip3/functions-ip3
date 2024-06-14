@@ -11,7 +11,7 @@ namespace functions.dto
     {
         private string connectionString;
 
-        public Connection()
+        public Connection(String databaseSelection)
         {
             var configuration = new ConfigurationBuilder()
                        .SetBasePath(Directory.GetCurrentDirectory())
@@ -19,13 +19,13 @@ namespace functions.dto
                        .Build();
 
             // Lê os valores de configuração
-            string server = configuration["ConfDB:Server"];
-            string database = configuration["ConfDB:Database"];
-            string integratedSecurity = configuration["ConfDB:IntegratedSecurity"];
+            // string server = configuration["ConfDB:Server"];
+            // string database = configuration["ConfDB:Database"];
+            // string integratedSecurity = configuration["ConfDB:IntegratedSecurity"];
 
             // Constrói a connection string
-            connectionString = $"Server={server};Database={database};Integrated Security={integratedSecurity};";
-
+            // connectionString = $"Server={server};Database={database};Integrated Security={integratedSecurity};";
+            connectionString = configuration.GetConnectionString(databaseSelection);
         }
 
         public SqlConnection GetConnection()
