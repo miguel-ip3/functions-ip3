@@ -138,7 +138,8 @@ namespace functions
                 var clieId = (int)group.Key; // Obtendo o CLIE_ID do grupo
 
                 // Verificando se há webhooks de email para este CLIE_ID
-                var smsWebhook = GetWebhook(connection, clieId, "sms");
+                //var smsWebhook = GetWebhook(connection, clieId, "sms");
+                var smsWebhook = GetWebhook(connection, clieId);
 
                 if (!string.IsNullOrEmpty(smsWebhook))
                 {
@@ -164,7 +165,8 @@ namespace functions
                 {
                     // Obtendo o webhook do primeiro item do bloco (assumindo que todos os itens do bloco têm o mesmo CLIE_ID)
                     var clieId = (int)block.First()["CLIE_ID"];
-                    var smsWebhook = GetWebhook(connection, clieId, "sms");
+                    //var smsWebhook = GetWebhook(connection, clieId, "sms");
+                    var smsWebhook = GetWebhook(connection, clieId);
 
                     if (!string.IsNullOrEmpty(smsWebhook))
                     {
@@ -219,7 +221,7 @@ namespace functions
         }
 
         // Função para obter o webhook do tipo email para um determinado CLIE_ID
-        private string GetWebhook(SqlConnection connection, int clieId, string typeWebhook)
+        private string GetWebhook(SqlConnection connection, int clieId)
         {
             string webhook = string.Empty;
 
@@ -229,12 +231,12 @@ namespace functions
                             FROM 
                                 [ip3Teste_SMS].[dbo].[SMS_Webhooks] 
                             WHERE 
-                                CLIE_ID = @clieId AND TYPE_WEBHOOK = @typeWebhook";
+                                CLIE_ID = @clieId";
 
             using (var command = new SqlCommand(query, connection))
             {
                 command.Parameters.AddWithValue("@clieId", clieId);
-                command.Parameters.AddWithValue("@typeWebhook", typeWebhook);
+                //command.Parameters.AddWithValue("@typeWebhook", typeWebhook);
 
                 using (var reader = command.ExecuteReader())
                 {
