@@ -13,21 +13,21 @@ namespace functions
     public class callbackSmsService
     {
         private readonly ILogger _logger;
-        private readonly IConfiguration _configuration;
-        private readonly int _blockSize;
-        private readonly int _pauseMilliseconds;
+        // private readonly IConfiguration _configuration;
+        // private readonly int _blockSize;
+        // private readonly int _pauseMilliseconds;
 
         public callbackSmsService(ILoggerFactory loggerFactory)
         {
             _logger = loggerFactory.CreateLogger<callbackSmsService>();
 
-            _configuration = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                .Build();
+            // _configuration = new ConfigurationBuilder()
+            //     .SetBasePath(Directory.GetCurrentDirectory())
+            //     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            //     .Build();
 
-            _blockSize = _configuration.GetValue<int>("SendCallbackSms:BlockSize");
-            _pauseMilliseconds = _configuration.GetValue<int>("SendCallbackSms:PauseMilliseconds");
+            // _blockSize = _configuration.GetValue<int>("SendCallbackSms:BlockSize");
+            // _pauseMilliseconds = _configuration.GetValue<int>("SendCallbackSms:PauseMilliseconds");
         }
 
         // Conectar com o banco de dados
@@ -76,7 +76,7 @@ namespace functions
                         Console.WriteLine($"==============================================");
 
                         // Processando e exibindo os resultados em blocos de 5
-                        await SendInBlocksAsync(results, _blockSize, _pauseMilliseconds, connection);
+                        await SendInBlocksAsync(results, connection);
                     }
                 }
                 catch (Exception ex)
@@ -125,25 +125,32 @@ namespace functions
         //Convertendo um resultado de consulta para JSON..
 
 
-        public async Task SendInBlocksAsync(List<Dictionary<string, object>> results, int blockSize, int pauseMilliseconds, SqlConnection connection)
+        public async Task SendInBlocksAsync(List<Dictionary<string, object>> results, SqlConnection connection)
         {
             // Agrupando os resultados por CLIE_ID
             var groupedResultsbyClie = results.GroupBy(r => r["CLIE_ID"]).ToList();
 
             List<List<Dictionary<string, object>>> blocks = new List<List<Dictionary<string, object>>>();
 
-            // Formar blocos apenas se houver um webhook do tipo email associado ao CLIE_ID
+            // Dicionário para armazenar configurações de webhook por CLIE_ID
+            var webhookConfigs = new Dictionary<int, (string webhook, int blockSize, int pauseMilliseconds)>();
+
+            // Obter todas as configurações de webhook necessárias
             foreach (var group in groupedResultsbyClie)
             {
-                var clieId = (int)group.Key; // Obtendo o CLIE_ID do grupo
+                var clieId = (int)group.Key;
 
-                // Verificando se há webhooks de email para este CLIE_ID
-                //var smsWebhook = GetWebhook(connection, clieId, "sms");
-                var smsWebhook = GetWebhook(connection, clieId);
+                if (!webhookConfigs.ContainsKey(clieId))
+                {
+                    webhookConfigs[clieId] = GetWebhook(connection, clieId);
+                }
 
-                if (!string.IsNullOrEmpty(smsWebhook))
+                var webhookConfig = webhookConfigs[clieId];
+
+                if (!string.IsNullOrEmpty(webhookConfig.webhook))
                 {
                     var groupList = group.ToList();
+                    int blockSize = webhookConfig.blockSize;
 
                     // Dividindo cada grupo em blocos do tamanho especificado
                     for (int i = 0; i < groupList.Count; i += blockSize)
@@ -154,7 +161,7 @@ namespace functions
                 }
                 else
                 {
-                    Console.WriteLine($"Não há webhooks de SMS para o cliente {clieId}. Ignorando os resultados deste cliente.");
+                    Console.WriteLine($"Não há webhooks de SMS ou configuração inválida para o cliente {clieId}. Ignorando os resultados deste cliente.");
                 }
             }
 
@@ -163,27 +170,27 @@ namespace functions
             {
                 foreach (var block in blocks)
                 {
-                    // Obtendo o webhook do primeiro item do bloco (assumindo que todos os itens do bloco têm o mesmo CLIE_ID)
+                    // Obtendo o CLIE_ID do primeiro item do bloco (assumindo que todos os itens do bloco têm o mesmo CLIE_ID)
                     var clieId = (int)block.First()["CLIE_ID"];
-                    //var smsWebhook = GetWebhook(connection, clieId, "sms");
-                    var smsWebhook = GetWebhook(connection, clieId);
+                    var webhookConfig = webhookConfigs[clieId];
 
-                    if (!string.IsNullOrEmpty(smsWebhook))
+                    if (!string.IsNullOrEmpty(webhookConfig.webhook))
                     {
+                        int blockSize = webhookConfig.blockSize;
+                        int pauseMilliseconds = webhookConfig.pauseMilliseconds;
 
-                        // var filteredBlock = block.Select(record => new
-                        // {
-                        //     LOSE_ID = record["LOSE_ID"],
-                        //     CLIE_ID = record["CLIE_ID"],
-                        //     ENVI_ID = record["ENVI_ID"],
-                        //     ENVI_Identificador = record["ENVI_Identificador"]
-                            
-                        // }).ToList();
+                        var filteredBlock = block.Select(record => new
+                        {
+                            ENVI_Identificador = record["ENVI_Identificador"],
+                            LOSE_StatusRetorno = record["LOSE_StatusRetorno"],
+                            LOSE_DataHoraStatus = record["LOSE_DataHoraStatus"],
+
+                        }).ToList();
 
                         // Retornando para o formato de JSON para envio
-                        string blockJson = JsonSerializer.Serialize(block, new JsonSerializerOptions { WriteIndented = true });
+                        string blockJson = JsonSerializer.Serialize(filteredBlock, new JsonSerializerOptions { WriteIndented = true });
 
-                        //Visualizando os blocos enviados..
+                        // Visualizando os blocos enviados
                         Console.WriteLine("Enviando bloco de SMS:");
                         Console.WriteLine(blockJson);
 
@@ -191,7 +198,7 @@ namespace functions
                         var content = new StringContent(blockJson, System.Text.Encoding.UTF8, "application/json");
 
                         // Realizar chamada HTTP POST e aguardar a resposta
-                        var response = await httpClient.PostAsync(smsWebhook, content);
+                        var response = await httpClient.PostAsync(webhookConfig.webhook, content);
 
                         if (response.IsSuccessStatusCode)
                         {
@@ -200,7 +207,7 @@ namespace functions
                         }
                         else
                         {
-                            Console.WriteLine($"Falha ao enviar o bloco para o webhook: {smsWebhook}");
+                            Console.WriteLine($"Falha ao enviar o bloco para o webhook: {webhookConfig.webhook}");
                         }
 
                         // Verificando se não é o último bloco a ser executado
@@ -214,20 +221,25 @@ namespace functions
                     }
                     else
                     {
-                        Console.WriteLine($"Não foi possível obter o webhook de sms para o cliente {clieId}. Bloco ignorado.");
+                        Console.WriteLine($"Não foi possível obter o webhook ou configuração de SMS para o cliente {clieId}. Bloco ignorado.");
                     }
                 }
             }
         }
 
         // Função para obter o webhook do tipo email para um determinado CLIE_ID
-        private string GetWebhook(SqlConnection connection, int clieId)
+        private (string webhook, int blockSize, int pauseMilliseconds) GetWebhook(SqlConnection connection, int clieId)
         {
             string webhook = string.Empty;
+            int blockSize = 0;
+            int pauseMilliseconds = 0;
 
-            // Consulta SQL para buscar o webhook para o CLIE_ID e tipo de webhook
-            string query = @"SELECT 
-                                WEBHOOK 
+            // Consulta SQL para buscar o webhook, BLOCK_Size e PAUSE_Milliseconds para o CLIE_ID
+            string query = @"
+                            SELECT 
+                                WEBHOOK,
+                                BLOCK_Size,
+                                PAUSE_Milliseconds
                             FROM 
                                 [ip3Teste_SMS].[dbo].[SMS_Webhooks] 
                             WHERE 
@@ -236,18 +248,19 @@ namespace functions
             using (var command = new SqlCommand(query, connection))
             {
                 command.Parameters.AddWithValue("@clieId", clieId);
-                //command.Parameters.AddWithValue("@typeWebhook", typeWebhook);
 
                 using (var reader = command.ExecuteReader())
                 {
                     if (reader.Read())
                     {
-                        webhook = reader.GetString(0);
+                        webhook = reader.GetString(reader.GetOrdinal("WEBHOOK"));
+                        blockSize = reader.GetInt32(reader.GetOrdinal("BLOCK_Size"));
+                        pauseMilliseconds = reader.GetInt32(reader.GetOrdinal("PAUSE_Milliseconds"));
                     }
                 }
             }
 
-            return webhook;
+            return (webhook, blockSize, pauseMilliseconds);
         }
 
 
@@ -285,12 +298,18 @@ namespace functions
                     string idsParameter = string.Join(",", idsToUpdate);
 
                     // Construir a consulta de atualização em massa
-                    string updateQuery = $"UPDATE [ip3Teste_SMS].[dbo].[SMS_Log_StatusEnvio] SET [LOSE_Enviado] = @loseenviado WHERE [LOSE_ID] IN ({idsParameter})";
+                    string updateQuery = $@"
+                                            UPDATE [ip3Teste_SMS].[dbo].[SMS_Log_StatusEnvio] 
+                                            SET 
+                                                [LOSE_Enviado] = @loseenviado, 
+                                                [LOSE_DatatHoraEnvio] = @dataHoraEnvio 
+                                            WHERE [LOSE_ID] IN ({idsParameter})";
 
                     using (SqlCommand updateCommand = new SqlCommand(updateQuery, connection))
                     {
                         updateCommand.Parameters.Clear();
                         updateCommand.Parameters.AddWithValue("@loseenviado", 1);
+                        updateCommand.Parameters.AddWithValue("@dataHoraEnvio", DateTime.Now);
                         updateCommand.ExecuteNonQuery();
                     }
                 }
@@ -305,11 +324,6 @@ namespace functions
         [Function("callbackSmsService")]
         public async Task Run([TimerTrigger("0 */1 * * * *")] TimerInfo myTimer)
         {
-            // Acessar banco de dados de Adriano
-
-            // Utilizar o pool de conexões para realizar uma query no campo discutido, verificar a última atualização (1 min atrás)
-
-            // Enviar uma requisição com o objeto para o webhook do cliente (enviar via post pro endpoint do cliente. Verificar quantidade de disparos..)
 
             _logger.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
 
