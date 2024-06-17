@@ -46,22 +46,16 @@ Connection dbConnection = new Connection("DatabaseSMS");
 
 # Tabela do banco de dados
 
-Foram adicionadas mais duas tabelas aos bancos de dados:
-dbo.MKT_Webhooks
+Foram adicionadas mais duas tabelas aos bancos de dados:  
+dbo.MKT_Webhooks  
 dbo.SMS_Webhooks
 
-Essas tabelas possuem as seguintes colunas:
-WEBHOOK_ID;
-CLIE_ID;
-WEBHOOK;
-BLOCK_Size;
-PAUSE_Milliseconds.
-
-WEBHOOK_ID = ID da tupla
-CLIE_ID = ID do cliente relacionado ao webhook
-WEBHOOK = O próprio valor do webhook utilizado para enviar os blocos de JSON
-BLOCK_Size = Tamanho dos blocos a serem enviados para o webhook
-PAUSE_Milliseconds = Intervalo entre os envios dos blocos
+Essas tabelas possuem as seguintes colunas:  
+- `WEBHOOK_ID [int] IDENTITY(1,1) NOT NULL`: ID da tupla  
+- `CLIE_ID`: ID do cliente relacionado ao webhook  
+- `WEBHOOK varchar[255]`: O próprio valor do webhook utilizado para enviar os blocos de JSON  
+- `BLOCK_Size [int]`: Tamanho dos blocos a serem enviados para o webhook  
+- `PAUSE_Milliseconds [int]`: Intervalo entre os envios dos blocos  
 
 # Site de testes
 
