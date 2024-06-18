@@ -58,7 +58,7 @@ namespace functions
                                 [LOSE_Enviado],
                                 [LOSE_DatatHoraEnvio]
                             FROM 
-                                [ip3Teste].[dbo].[MKT_Log_StatusEnvio]
+                                [dbo].[MKT_Log_StatusEnvio]
                             WHERE 
                                 [LOSE_Enviado] IS NULL OR [LOSE_Enviado] = @loseEnviado
                             ORDER BY 
@@ -246,7 +246,7 @@ namespace functions
                                 BLOCK_Size,
                                 PAUSE_Milliseconds
                             FROM 
-                                [ip3Teste].[dbo].[MKT_Webhooks] 
+                                [dbo].[MKT_Webhooks] 
                             WHERE 
                                 CLIE_ID = @clieId";
 
@@ -304,7 +304,7 @@ namespace functions
 
                     // Construir a consulta de atualização em massa
                     string updateQuery = $@"
-                                            UPDATE [ip3Teste].[dbo].[MKT_Log_StatusEnvio] 
+                                            UPDATE [dbo].[MKT_Log_StatusEnvio] 
                                             SET 
                                                 [LOSE_Enviado] = @loseenviado, 
                                                 [LOSE_DatatHoraEnvio] = @dataHoraEnvio 
