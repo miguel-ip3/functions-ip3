@@ -61,6 +61,21 @@ Essas tabelas possuem as seguintes colunas:
 
 Foi utilizado o site [https://webhook.site/](https://) para fins de teste de funcionalidade para os webhooks.
 
+# Variáveis de ambiente (Azure)
+
+- Encontre a função (azure function app)  
+- Vá em configurações da função (configurações)  
+- Configure as variáveis de ambiente (configuração de aplicativo)  
+- Adicione as variáveis de ambiente necessárias, como DatabaseEmail e DatabaseSMS, com seus respectivos valores de strings de conexão.  
+
+**Exemplo:**  
+Nome: ConnectionStrings__DatabaseEmail  
+Valor: Server=meuServidorSQL;Database=ip3Teste;User Id=meuUsuario;Password=minhaSenha;  
+
+Nome: ConnectionStrings__DatabaseSMS  
+Valor: Server=meuServidorSQL;Database=ip3Teste_SMS;User Id=meuUsuario;Password=minhaSenha;  
+
+
 # Lembrete
 
 Atualizar o campo **LOSE_Enviado** para 1 para evitar envio de mensagens já enviadas.
