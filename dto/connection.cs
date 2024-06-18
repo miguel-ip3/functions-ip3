@@ -16,6 +16,7 @@ namespace functions.dto
             var configuration = new ConfigurationBuilder()
                        .SetBasePath(Directory.GetCurrentDirectory())
                        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                       .AddEnvironmentVariables()
                        .Build();
 
             // Lê os valores de configuração
