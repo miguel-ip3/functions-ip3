@@ -46,22 +46,25 @@ namespace functions
 
                     // Consulta SQL...
                     string query = @"
-                            SELECT
-                                [LOSE_ID],
-                                [CLIE_ID],
-                                [ENVI_ID],
-                                [ENVI_Identificador],
-                                [ENVI_StatusCode],
-                                [LOSE_StatusRetorno],
-                                [LOSE_DataHoraStatus],
-                                [LOSE_Enviado],
-                                [LOSE_DatatHoraEnvio]
-                            FROM 
-                                [dbo].[SMS_Log_StatusEnvio]
-                            WHERE 
-                                [LOSE_Enviado] IS NULL OR [LOSE_Enviado] = @loseEnviado
-                            ORDER BY 
-                                [LOSE_DataHoraStatus] DESC;";
+                        SELECT
+                            S.[LOSE_ID],
+                            S.[CLIE_ID],
+                            S.[ENVI_Identificador],
+                            S.[LOSE_StatusRetorno],
+                            S.[LOSE_DataHoraStatus],
+                            S.[LOSE_Enviado],
+                            S.[LOSE_DataHoraEnvio],
+                            W.[WEBHOOK],
+                            W.[BLOCK_Size],
+                            W.[PAUSE_Milliseconds]
+                        FROM 
+                            [dbo].[SMS_Log_StatusEnvio] S
+                        INNER JOIN 
+                            [dbo].[SMS_Webhooks] W ON S.CLIE_ID = W.CLIE_ID
+                        WHERE 
+                            (S.[LOSE_Enviado] IS NULL OR S.[LOSE_Enviado] = @loseEnviado) AND W.[WEBHOOK_Ativo] = 1
+                        ORDER BY 
+                            S.[LOSE_DataHoraStatus];";
 
                     using (SqlCommand command = new SqlCommand(query, connection))
                     {
@@ -110,7 +113,10 @@ namespace functions
                         ["LOSE_StatusRetorno"] = reader["LOSE_StatusRetorno"],
                         ["LOSE_DataHoraStatus"] = reader["LOSE_DataHoraStatus"],
                         ["LOSE_Enviado"] = reader["LOSE_Enviado"],
-                        ["LOSE_DatatHoraEnvio"] = reader["LOSE_DatatHoraEnvio"]
+                        ["LOSE_DataHoraEnvio"] = reader["LOSE_DataHoraEnvio"],
+                        ["WEBHOOK"] = reader["WEBHOOK"],
+                        ["BLOCK_Size"] = reader["BLOCK_Size"],
+                        ["PAUSE_Milliseconds"] = reader["PAUSE_Milliseconds"]
                     };
                     results.Add(row);
                 }
@@ -127,96 +133,64 @@ namespace functions
 
         public async Task SendInBlocksAsync(List<Dictionary<string, object>> results, SqlConnection connection)
         {
-            // Agrupando os resultados por CLIE_ID
             var groupedResultsbyClie = results.GroupBy(r => r["CLIE_ID"]).ToList();
 
             List<List<Dictionary<string, object>>> blocks = new List<List<Dictionary<string, object>>>();
 
-            // Dicionário para armazenar configurações de webhook por CLIE_ID
-            var webhookConfigs = new Dictionary<int, (string webhook, int blockSize, int pauseMilliseconds)>();
-
-            // Obter todas as configurações de webhook necessárias
             foreach (var group in groupedResultsbyClie)
             {
-                var clieId = (int)group.Key;
+                var groupList = group.ToList();
+                int blockSize = (int)groupList.First()["BLOCK_Size"];
 
-                if (!webhookConfigs.ContainsKey(clieId))
+                for (int i = 0; i < groupList.Count; i += blockSize)
                 {
-                    webhookConfigs[clieId] = GetWebhook(connection, clieId);
-                }
-
-                var webhookConfig = webhookConfigs[clieId];
-
-                if (!string.IsNullOrEmpty(webhookConfig.webhook))
-                {
-                    var groupList = group.ToList();
-                    int blockSize = webhookConfig.blockSize;
-
-                    // Dividindo cada grupo em blocos do tamanho especificado
-                    for (int i = 0; i < groupList.Count; i += blockSize)
-                    {
-                        var block = groupList.Skip(i).Take(blockSize).ToList();
-                        blocks.Add(block);
-                    }
-                }
-                else
-                {
-                    Console.WriteLine($"Não há webhooks de SMS ou configuração inválida para o cliente {clieId}. Ignorando os resultados deste cliente.");
+                    var block = groupList.Skip(i).Take(blockSize).ToList();
+                    blocks.Add(block);
                 }
             }
 
-            // Iterando pelos blocos e exibindo-os com pausa entre eles
             using (var httpClient = new HttpClient())
             {
                 foreach (var block in blocks)
                 {
-                    // Obtendo o CLIE_ID do primeiro item do bloco (assumindo que todos os itens do bloco têm o mesmo CLIE_ID)
                     var clieId = (int)block.First()["CLIE_ID"];
-                    var webhookConfig = webhookConfigs[clieId];
+                    string webhook = block.First()["WEBHOOK"].ToString();
+                    int blockSize = (int)block.First()["BLOCK_Size"];
+                    int pauseMilliseconds = (int)block.First()["PAUSE_Milliseconds"];
 
-                    if (!string.IsNullOrEmpty(webhookConfig.webhook))
+                    if (!string.IsNullOrEmpty(webhook))
                     {
-                        int blockSize = webhookConfig.blockSize;
-                        int pauseMilliseconds = webhookConfig.pauseMilliseconds;
-
                         var filteredBlock = block.Select(record => new
                         {
                             ENVI_Identificador = record["ENVI_Identificador"],
                             LOSE_StatusRetorno = record["LOSE_StatusRetorno"],
                             LOSE_DataHoraStatus = record["LOSE_DataHoraStatus"],
-
                         }).ToList();
 
-                        // Retornando para o formato de JSON para envio
                         string blockJson = JsonSerializer.Serialize(filteredBlock, new JsonSerializerOptions { WriteIndented = true });
 
-                        // Visualizando os blocos enviados
                         Console.WriteLine("Enviando bloco de SMS:");
                         Console.WriteLine(blockJson);
 
-                        // Criando o conteúdo para a requisição HTTP
                         var content = new StringContent(blockJson, System.Text.Encoding.UTF8, "application/json");
 
-                        // Realizar chamada HTTP POST e aguardar a resposta
-                        var response = await httpClient.PostAsync(webhookConfig.webhook, content);
+                        var response = await httpClient.PostAsync(webhook, content);
 
                         if (response.IsSuccessStatusCode)
                         {
-                            // Atualizar o CALLBACK_Enviado no banco de dados
                             UpdateCallbackEnviado(connection, block);
                         }
                         else
                         {
-                            Console.WriteLine($"Falha ao enviar o bloco para o webhook: {webhookConfig.webhook}");
+                            Console.WriteLine($"Falha ao enviar o bloco para o webhook: {webhook}");
                         }
 
-                        // Verificando se não é o último bloco a ser executado
                         if (block != blocks.Last())
                         {
-                            Console.WriteLine("========================================");
+                            Console.WriteLine("==============================================================================================");
                             Console.WriteLine($"Pausando o bloco de SMS por {pauseMilliseconds / 1000} segundos antes do próximo bloco de {blockSize}...");
-                            Console.WriteLine("========================================");
-                            await Task.Delay(pauseMilliseconds); // Pausa assíncrona entre blocos
+                            Console.WriteLine("===============================================================================================");
+                            await Task.Delay(pauseMilliseconds);
                         }
                     }
                     else
@@ -228,40 +202,41 @@ namespace functions
         }
 
         // Função para obter o webhook do tipo email para um determinado CLIE_ID
-        private (string webhook, int blockSize, int pauseMilliseconds) GetWebhook(SqlConnection connection, int clieId)
-        {
-            string webhook = string.Empty;
-            int blockSize = 0;
-            int pauseMilliseconds = 0;
+        // private (string webhook, int blockSize, int pauseMilliseconds) GetWebhook(SqlConnection connection, int clieId)
+        // {
+        //     string webhook = string.Empty;
+        //     int blockSize = 0;
+        //     int pauseMilliseconds = 0;
 
-            // Consulta SQL para buscar o webhook, BLOCK_Size e PAUSE_Milliseconds para o CLIE_ID
-            string query = @"
-                            SELECT 
-                                WEBHOOK,
-                                BLOCK_Size,
-                                PAUSE_Milliseconds
-                            FROM 
-                                [dbo].[SMS_Webhooks] 
-                            WHERE 
-                                CLIE_ID = @clieId";
+        //     // Consulta SQL para buscar o webhook, BLOCK_Size e PAUSE_Milliseconds para o CLIE_ID
+        //     string query = @"
+        //                     SELECT 
+        //                         WEBHOOK,
+        //                         BLOCK_Size,
+        //                         PAUSE_Milliseconds
+        //                     FROM 
+        //                         [dbo].[SMS_Webhooks] 
+        //                     WHERE 
+        //                         CLIE_ID = @clieId AND WEBHOOK_Ativo = @ativo";
 
-            using (var command = new SqlCommand(query, connection))
-            {
-                command.Parameters.AddWithValue("@clieId", clieId);
+        //     using (var command = new SqlCommand(query, connection))
+        //     {
+        //         command.Parameters.AddWithValue("@clieId", clieId);
+        //         command.Parameters.AddWithValue("@ativo", 1);
 
-                using (var reader = command.ExecuteReader())
-                {
-                    if (reader.Read())
-                    {
-                        webhook = reader.GetString(reader.GetOrdinal("WEBHOOK"));
-                        blockSize = reader.GetInt32(reader.GetOrdinal("BLOCK_Size"));
-                        pauseMilliseconds = reader.GetInt32(reader.GetOrdinal("PAUSE_Milliseconds"));
-                    }
-                }
-            }
+        //         using (var reader = command.ExecuteReader())
+        //         {
+        //             if (reader.Read())
+        //             {
+        //                 webhook = reader.GetString(reader.GetOrdinal("WEBHOOK"));
+        //                 blockSize = reader.GetInt32(reader.GetOrdinal("BLOCK_Size"));
+        //                 pauseMilliseconds = reader.GetInt32(reader.GetOrdinal("PAUSE_Milliseconds"));
+        //             }
+        //         }
+        //     }
 
-            return (webhook, blockSize, pauseMilliseconds);
-        }
+        //     return (webhook, blockSize, pauseMilliseconds);
+        // }
 
 
         private void UpdateCallbackEnviado(SqlConnection connection, List<Dictionary<string, object>> block)
@@ -302,7 +277,7 @@ namespace functions
                                             UPDATE [dbo].[SMS_Log_StatusEnvio] 
                                             SET 
                                                 [LOSE_Enviado] = @loseenviado, 
-                                                [LOSE_DatatHoraEnvio] = @dataHoraEnvio 
+                                                [LOSE_DataHoraEnvio] = @dataHoraEnvio 
                                             WHERE [LOSE_ID] IN ({idsParameter})";
 
                     using (SqlCommand updateCommand = new SqlCommand(updateQuery, connection))
