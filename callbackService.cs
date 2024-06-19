@@ -77,9 +77,9 @@ namespace functions
                         // Convertendo o resultado da consulta para Dictionary
                         var results = ExecuteQueryDictionary(command, ref countEmail);
 
-                        Console.WriteLine($"============================================================================");
-                        Console.WriteLine($"Encontrados um total de {countEmail} registros de Email como status enviado");
-                        Console.WriteLine($"============================================================================");
+                        Console.WriteLine($"============================================================================================");
+                        Console.WriteLine($"Encontrados um total de {countEmail} registros de Email como status enviado e webhook ativo");
+                        Console.WriteLine($"===========================================================================================");
 
                         // Processando e exibindo os resultados em blocos de 5
                         await SendInBlocksAsync(results, connection);
